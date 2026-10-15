@@ -1,0 +1,4 @@
+# The lab cluster enforces: a pod that breaks "baseline" is rejected.
+# Try it:  kubectl --context aws1-k2 run p --image=nginx --privileged
+validationFailureAction: Enforce
+failurePolicy: Fail

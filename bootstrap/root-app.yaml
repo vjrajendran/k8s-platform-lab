@@ -1,0 +1,21 @@
+# The "root" Application (app of apps): everything under root/ in Git -
+# the AppProject and one ApplicationSet per platform component.
+# bootstrap.sh fills in __REPO_URL__ and __REVISION__ from platform.env.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: __REPO_URL__
+    targetRevision: __REVISION__
+    path: root
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

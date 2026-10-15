@@ -1,0 +1,49 @@
+# cert-manager: Certificate / Issuer CRDs; issues and renews TLS certificates.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cert-manager
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - clusters:                     # one Application per registered cluster matching:
+      selector:
+        matchLabels:
+          platform: "true"
+  template:
+    metadata:
+      name: 'cert-manager-{{.name}}'
+      labels:
+        component: cert-manager
+    spec:
+      project: platform
+      sources:
+      - repoURL: https://charts.jetstack.io
+        chart: cert-manager
+        targetRevision: v1.21.2
+        helm:
+          releaseName: cert-manager
+          valueFiles:                         # common, then per cluster type, then per role
+          - $values/addons/cert-manager/values.yaml
+          - $values/addons/cert-manager/values-{{index .metadata.labels "type"}}.yaml
+          - $values/addons/cert-manager/values-{{index .metadata.labels "role"}}.yaml
+          ignoreMissingValueFiles: true
+      - repoURL: https://github.com/vjrajendran/k8s-platform-lab.git
+        targetRevision: main
+        ref: values                           # "$values" above = this repo
+      destination:
+        server: '{{.server}}'
+        namespace: cert-manager
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true                  # big CRDs don't fit client-side apply annotations
+        - SkipDryRunOnMissingResource=true      # e.g. a ClusterIssuer before cert-manager's CRDs exist
+        retry:                                  # components come up in any order - retry until their dependencies exist
+          limit: 20
+          backoff: {duration: 20s, factor: 2, maxDuration: 5m}

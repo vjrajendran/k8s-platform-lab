@@ -1,0 +1,139 @@
+# Demo workload, deployed by Argo CD to the apps cluster:
+# cloud load balancer -> Traefik Gateway -> HTTPRoute -> Service -> nginx pods.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: web-demo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web
+  namespace: web-demo
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        root /usr/share/nginx/html;
+        ssi on;                      # lets the page show this pod's name
+        location / { index index.html; }
+        location = /healthz { access_log off; return 200 "ok\n"; }
+    }
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Hello from Kubernetes</title>
+      <style>
+        body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0;
+               display: grid; place-items: center; min-height: 100vh; margin: 0; }
+        main { text-align: center; padding: 2rem; }
+        h1 { font-size: 2.4rem; margin: 0 0 .5rem; }
+        .pod { font-family: ui-monospace, monospace; background: #1e293b; color: #7dd3fc;
+               padding: .4rem .8rem; border-radius: .4rem; display: inline-block; }
+        p { color: #94a3b8; }
+      </style>
+    </head>
+    <body>
+      <main>
+        <h1>☸ Hello from Kubernetes</h1>
+        <p>Deployed by Argo CD from Git. Routed: load balancer → Traefik Gateway → HTTPRoute → nginx.</p>
+        <p>Served by pod <span class="pod"><!--# echo var="hostname" --></span></p>
+        <p>Refresh a few times - with 3 replicas the pod name changes.</p>
+      </main>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: web-demo
+spec:
+  # no "replicas": the HorizontalPodAutoscaler below owns the count (3-6)
+  selector:
+    matchLabels: {app: web}
+  template:
+    metadata:
+      labels: {app: web}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: nginx
+        image: nginxinc/nginx-unprivileged:1.27-alpine
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet: {path: /healthz, port: 8080}
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {memory: 64Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: [ALL]}
+        volumeMounts:
+        - {name: site, mountPath: /usr/share/nginx/html/index.html, subPath: index.html}
+        - {name: site, mountPath: /etc/nginx/conf.d/default.conf, subPath: default.conf}
+      volumes:
+      - name: site
+        configMap: {name: web}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: web-demo
+spec:
+  selector: {app: web}
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+# Gateway API route: attach to Traefik's Gateway, send everything to the web Service
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: web
+  namespace: web-demo
+spec:
+  parentRefs:
+  - name: traefik-gateway
+    namespace: traefik
+    sectionName: web
+  rules:
+  - matches:
+    - path: {type: PathPrefix, value: /}
+    backendRefs:
+    - name: web
+      port: 80
+---
+# Scale 3 -> 6 pods when average CPU passes 60% (needs metrics-server)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+  namespace: web-demo
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: web}
+  minReplicas: 3
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target: {type: Utilization, averageUtilization: 60}
+---
+# Node drains (upgrades) never take more than one pod away at a time
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+  namespace: web-demo
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: web}

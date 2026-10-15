@@ -1,0 +1,41 @@
+# Argo CD on the hub cluster. bootstrap.sh installs it with Helm - it's the only
+# thing installed by hand; everything else comes from Git through Argo CD.
+
+dex:
+  enabled: false            # no SSO in the lab - log in as admin
+notifications:
+  enabled: false
+
+configs:
+  cm:
+    timeout.reconciliation: 120s   # how often Argo CD re-checks Git (also: webhooks, or "Refresh" in the UI)
+
+server:
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    # loadBalancerSourceRanges: bootstrap.sh sets it to your current IP only
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+
+controller:                   # the reconcile loop: Git (desired) vs clusters (actual)
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 1536Mi}
+
+repoServer:                   # clones Git and renders Helm / Kustomize / plain YAML
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 1Gi}
+
+applicationSet:               # turns one ApplicationSet into an Application per cluster
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
+
+redis:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}

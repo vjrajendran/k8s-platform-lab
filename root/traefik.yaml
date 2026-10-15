@@ -1,0 +1,49 @@
+# Traefik: ingress controller + Gateway API implementation, behind a cloud LoadBalancer.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: traefik
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - clusters:                     # one Application per registered cluster matching:
+      selector:
+        matchLabels:
+          platform: "true"
+  template:
+    metadata:
+      name: 'traefik-{{.name}}'
+      labels:
+        component: traefik
+    spec:
+      project: platform
+      sources:
+      - repoURL: https://traefik.github.io/charts
+        chart: traefik
+        targetRevision: 41.7.1
+        helm:
+          releaseName: traefik
+          valueFiles:                         # common, then per cluster type, then per role
+          - $values/addons/traefik/values.yaml
+          - $values/addons/traefik/values-{{index .metadata.labels "type"}}.yaml
+          - $values/addons/traefik/values-{{index .metadata.labels "role"}}.yaml
+          ignoreMissingValueFiles: true
+      - repoURL: https://github.com/vjrajendran/k8s-platform-lab.git
+        targetRevision: main
+        ref: values                           # "$values" above = this repo
+      destination:
+        server: '{{.server}}'
+        namespace: traefik
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true                  # big CRDs don't fit client-side apply annotations
+        - SkipDryRunOnMissingResource=true      # e.g. a ClusterIssuer before cert-manager's CRDs exist
+        retry:                                  # components come up in any order - retry until their dependencies exist
+          limit: 20
+          backoff: {duration: 20s, factor: 2, maxDuration: 5m}

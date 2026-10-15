@@ -1,0 +1,48 @@
+# Storage on kubeadm: local-path-provisioner, the default StorageClass (disk on the node).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: local-path
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - clusters:                     # one Application per registered cluster matching:
+      selector:
+        matchLabels:
+          platform: "true"
+          type: kubeadm
+  template:
+    metadata:
+      name: 'local-path-{{.name}}'
+      labels:
+        component: local-path
+    spec:
+      project: platform
+      sources:
+      - repoURL: https://github.com/rancher/local-path-provisioner
+        path: deploy/chart/local-path-provisioner
+        targetRevision: v0.0.37
+        helm:
+          releaseName: local-path
+          valueFiles:
+          - $values/addons/local-path/values.yaml
+          ignoreMissingValueFiles: true
+      - repoURL: https://github.com/vjrajendran/k8s-platform-lab.git
+        targetRevision: main
+        ref: values
+      destination:
+        server: '{{.server}}'
+        namespace: local-path-storage
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true                  # big CRDs don't fit client-side apply annotations
+        - SkipDryRunOnMissingResource=true      # e.g. a ClusterIssuer before cert-manager's CRDs exist
+        retry:                                  # components come up in any order - retry until their dependencies exist
+          limit: 20
+          backoff: {duration: 20s, factor: 2, maxDuration: 5m}

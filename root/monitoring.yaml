@@ -1,0 +1,51 @@
+# kube-prometheus-stack: Prometheus Operator (ServiceMonitor, PrometheusRule, ...), Prometheus, Alertmanager, Grafana - on the spokes.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - clusters:                     # one Application per registered cluster matching:
+      selector:
+        matchLabels:
+          platform: "true"
+        matchExpressions:
+        - {key: role, operator: In, values: [apps, lab]}
+  template:
+    metadata:
+      name: 'monitoring-{{.name}}'
+      labels:
+        component: monitoring
+    spec:
+      project: platform
+      sources:
+      - repoURL: https://prometheus-community.github.io/helm-charts
+        chart: kube-prometheus-stack
+        targetRevision: 92.8.0
+        helm:
+          releaseName: monitoring
+          valueFiles:                         # common, then per cluster type, then per role
+          - $values/addons/monitoring/values.yaml
+          - $values/addons/monitoring/values-{{index .metadata.labels "type"}}.yaml
+          - $values/addons/monitoring/values-{{index .metadata.labels "role"}}.yaml
+          ignoreMissingValueFiles: true
+      - repoURL: https://github.com/vjrajendran/k8s-platform-lab.git
+        targetRevision: main
+        ref: values                           # "$values" above = this repo
+      destination:
+        server: '{{.server}}'
+        namespace: monitoring
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true                  # big CRDs don't fit client-side apply annotations
+        - SkipDryRunOnMissingResource=true      # e.g. a ClusterIssuer before cert-manager's CRDs exist
+        retry:                                  # components come up in any order - retry until their dependencies exist
+          limit: 20
+          backoff: {duration: 20s, factor: 2, maxDuration: 5m}

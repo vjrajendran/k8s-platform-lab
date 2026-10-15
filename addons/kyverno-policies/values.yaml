@@ -1,0 +1,17 @@
+# Pod Security Standards "baseline" as Kyverno policies.
+# Audit = allow, but record violations in PolicyReports:
+#   kubectl get policyreports -A
+podSecurityStandard: baseline
+validationFailureAction: Audit
+
+# If Kyverno itself is down, let requests through instead of blocking the cluster
+failurePolicy: Ignore
+
+# System and host-level components legitimately need hostPath / hostNetwork / ...
+vpolExclude:
+  excludeNamespaces:
+    - kube-system
+    - kube-flannel
+    - kyverno
+    - monitoring          # node-exporter reads the host
+    - local-path-storage  # creates hostPath volumes

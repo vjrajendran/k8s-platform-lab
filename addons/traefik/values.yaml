@@ -1,0 +1,28 @@
+# Traefik: both an Ingress controller and a Gateway API implementation.
+service:
+  spec:
+    type: LoadBalancer        # EKS: built in. kubeadm: the AWS cloud controller (CLOUD_LB=1)
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb   # Network Load Balancer
+
+providers:
+  kubernetesIngress:
+    enabled: true             # classic Ingress objects
+  kubernetesGateway:
+    enabled: true             # Gateway API (HTTPRoute, ...) - needs the gateway-api CRDs
+
+gateway:                      # the chart's Gateway "traefik-gateway" in namespace traefik
+  enabled: true
+  listeners:
+    web:
+      namespacePolicy:
+        from: All             # HTTPRoutes from any namespace may attach
+
+metrics:
+  prometheus:
+    serviceMonitor:
+      enabled: false          # turn on once monitoring runs on that cluster (learning exercise)
+
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits: {memory: 256Mi}

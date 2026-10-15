@@ -1,0 +1,46 @@
+# kube-prometheus-stack, sized for 2 vCPU / 4 GB nodes.
+
+# Control-plane components on kubeadm listen on localhost only (and are hidden on
+# EKS) - scraping them would just raise "target down" alerts.
+kubeEtcd: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeProxy: {enabled: false}
+
+prometheus:
+  prometheusSpec:
+    retention: 24h            # sandboxes live 8 hours
+    # pick up ServiceMonitors / PodMonitors / rules from ANY namespace and release
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: {cpu: 100m, memory: 400Mi}
+      limits: {memory: 1200Mi}
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 128Mi}
+
+grafana:
+  adminPassword: admin        # lab only: Grafana isn't exposed - reach it with kubectl port-forward
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 384Mi}
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
+
+kube-state-metrics:
+  resources:
+    requests: {cpu: 10m, memory: 48Mi}
+    limits: {memory: 192Mi}
+
+prometheus-node-exporter:
+  resources:
+    requests: {cpu: 10m, memory: 24Mi}
+    limits: {memory: 64Mi}

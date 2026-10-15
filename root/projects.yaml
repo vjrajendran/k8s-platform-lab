@@ -1,0 +1,31 @@
+# AppProjects: what each group of Applications may deploy, and where.
+# Synced first (wave -1) so the ApplicationSets can use them.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Platform components - may install anything, anywhere (CRDs, operators)
+  sourceRepos: ["*"]
+  destinations:
+  - {server: "*", namespace: "*"}
+  clusterResourceWhitelist:
+  - {group: "*", kind: "*"}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: workloads
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Applications - only from this repo, no cluster-wide objects except their Namespace
+  sourceRepos: ["https://github.com/vjrajendran/k8s-platform-lab.git"]
+  destinations:
+  - {server: "*", namespace: "web-demo"}
+  clusterResourceWhitelist:
+  - {group: "", kind: Namespace}

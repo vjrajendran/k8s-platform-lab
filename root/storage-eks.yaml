@@ -1,0 +1,40 @@
+# Storage on EKS: a default gp3 StorageClass for the EBS CSI driver (installed by Terraform as an EKS add-on).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: storage-eks
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - clusters:                     # one Application per registered cluster matching:
+      selector:
+        matchLabels:
+          platform: "true"
+          type: eks
+  template:
+    metadata:
+      name: 'storage-eks-{{.name}}'
+      labels:
+        component: storage-eks
+    spec:
+      project: platform
+      source:
+        repoURL: https://github.com/vjrajendran/k8s-platform-lab.git
+        path: addons/storage-eks
+        targetRevision: main
+      destination:
+        server: '{{.server}}'
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true                  # big CRDs don't fit client-side apply annotations
+        - SkipDryRunOnMissingResource=true      # e.g. a ClusterIssuer before cert-manager's CRDs exist
+        retry:                                  # components come up in any order - retry until their dependencies exist
+          limit: 20
+          backoff: {duration: 20s, factor: 2, maxDuration: 5m}

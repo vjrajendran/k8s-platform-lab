@@ -1,0 +1,39 @@
+# Gateway API CRDs (GatewayClass, Gateway, HTTPRoute, ...) - the successor to Ingress. Version from Traefik's chart notes.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gateway-api
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - clusters:                     # one Application per registered cluster matching:
+      selector:
+        matchLabels:
+          platform: "true"
+  template:
+    metadata:
+      name: 'gateway-api-{{.name}}'
+      labels:
+        component: gateway-api
+    spec:
+      project: platform
+      source:
+        repoURL: https://github.com/kubernetes-sigs/gateway-api
+        path: config/crd/standard
+        targetRevision: v1.6.1
+      destination:
+        server: '{{.server}}'
+        namespace: default
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true                  # big CRDs don't fit client-side apply annotations
+        - SkipDryRunOnMissingResource=true      # e.g. a ClusterIssuer before cert-manager's CRDs exist
+        retry:                                  # components come up in any order - retry until their dependencies exist
+          limit: 20
+          backoff: {duration: 20s, factor: 2, maxDuration: 5m}

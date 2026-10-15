@@ -1,0 +1,49 @@
+# metrics-server: the resource metrics API behind 'kubectl top' and HorizontalPodAutoscalers.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: metrics-server
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - clusters:                     # one Application per registered cluster matching:
+      selector:
+        matchLabels:
+          platform: "true"
+  template:
+    metadata:
+      name: 'metrics-server-{{.name}}'
+      labels:
+        component: metrics-server
+    spec:
+      project: platform
+      sources:
+      - repoURL: https://kubernetes-sigs.github.io/metrics-server/
+        chart: metrics-server
+        targetRevision: 3.14.0
+        helm:
+          releaseName: metrics-server
+          valueFiles:                         # common, then per cluster type, then per role
+          - $values/addons/metrics-server/values.yaml
+          - $values/addons/metrics-server/values-{{index .metadata.labels "type"}}.yaml
+          - $values/addons/metrics-server/values-{{index .metadata.labels "role"}}.yaml
+          ignoreMissingValueFiles: true
+      - repoURL: https://github.com/vjrajendran/k8s-platform-lab.git
+        targetRevision: main
+        ref: values                           # "$values" above = this repo
+      destination:
+        server: '{{.server}}'
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true                  # big CRDs don't fit client-side apply annotations
+        - SkipDryRunOnMissingResource=true      # e.g. a ClusterIssuer before cert-manager's CRDs exist
+        retry:                                  # components come up in any order - retry until their dependencies exist
+          limit: 20
+          backoff: {duration: 20s, factor: 2, maxDuration: 5m}

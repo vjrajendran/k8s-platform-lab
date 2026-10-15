@@ -1,0 +1,6 @@
+storageClass:
+  defaultClass: true          # PVCs without a storageClassName land here
+  name: local-path
+resources:
+  requests: {cpu: 10m, memory: 32Mi}
+  limits: {memory: 128Mi}

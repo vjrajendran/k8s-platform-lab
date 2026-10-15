@@ -1,0 +1,3 @@
+# kubeadm kubelets serve self-signed certificates (no CSR signing set up)
+args:
+  - --kubelet-insecure-tls
