@@ -36,6 +36,11 @@ spec:
       destination:
         server: '{{.server}}'
         namespace: kyverno
+      ignoreDifferences:
+      - group: apiextensions.k8s.io
+        kind: CustomResourceDefinition
+        jqPathExpressions:
+        - '.spec | select(.group == "policies.kyverno.io" and .conversion.strategy == "None") | .conversion'
       syncPolicy:
         automated:
           prune: true

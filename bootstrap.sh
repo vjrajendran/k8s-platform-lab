@@ -16,7 +16,7 @@ HUB=$SB-eks1
 SPOKES=("$SB-k1:apps" "$SB-k2:lab") # <context>:<role>
 export KUBECONFIG=$HOME/.kube/multicloud.yaml
 [[ -d $HOME/.local/bin ]] && PATH=$HOME/.local/bin:$PATH
-SSH_OPTS=(-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR)
+SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR)
 
 hub() { kubectl --context "$HUB" "$@"; }
 step() { printf '\n\033[1m▶ %s\033[0m\n' "$*"; }
@@ -83,6 +83,7 @@ for spoke in "${SPOKES[@]}"; do
     # A ServiceAccount on the spoke, made over SSH (works behind a TLS-inspecting VPN)
     token=$(ssh -i "$LABS/keys/$SB.pem" "${SSH_OPTS[@]}" "ubuntu@$public_ip" 'bash -s' <bootstrap/spoke-access.sh) ||
         die "couldn't create Argo CD's ServiceAccount on $ctx"
+    [[ -n $token ]] || die "no Argo CD ServiceAccount token returned for $ctx"
 
     # The hub reaches the spoke over the VPC's private network - kubeadm's API
     # certificate includes the private IP, so TLS verifies normally

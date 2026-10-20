@@ -101,15 +101,20 @@ metadata:
   namespace: web-demo
 spec:
   parentRefs:
-  - name: traefik-gateway
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: traefik-gateway
     namespace: traefik
     sectionName: web
   rules:
   - matches:
     - path: {type: PathPrefix, value: /}
     backendRefs:
-    - name: web
+    - group: ""
+      kind: Service
+      name: web
       port: 80
+      weight: 1
 ---
 # Scale 3 -> 6 pods when average CPU passes 60% (needs metrics-server)
 apiVersion: autoscaling/v2
